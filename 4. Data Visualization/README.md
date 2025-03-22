@@ -1,1 +1,7 @@
-
+Matplotlib fundamentals
+Seaborn statistical visualizations
+Interactive plots with Plotly
+Dashboard creation
+Customizing visualizations
+Visualization best practices
+Exporting and sharing visualizations
