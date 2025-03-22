@@ -28,4 +28,3 @@ This section focuses on building a solid foundation in Python basics, which are 
 - [ ] Error handling
 - [ ] File I/O
 - [ ] Virtual environments
-
