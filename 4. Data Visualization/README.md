@@ -648,54 +648,6 @@ plt.annotate(f'Best: {best_value}%',
 plt.tight_layout()
 plt.savefig('corporate_styled_chart.png')
 plt.show()
-
-# Adding a watermark or logo to your visualizations
-from PIL import Image
-from matplotlib.offsetbox import OffsetImage, AnnotationBbox
-
-def add_logo(ax, logo_path, position='lower right', zoom=0.15, alpha=0.8):
-    """Add a logo to the visualization"""
-    try:
-        # Load the logo image
-        logo = Image.open(logo_path)
-        
-        # Create an OffsetImage
-        imagebox = OffsetImage(logo, zoom=zoom, alpha=alpha)
-        
-        # Define the position
-        if position == 'lower right':
-            xy = (0.95, 0.05)
-        elif position == 'lower left':
-            xy = (0.05, 0.05)
-        elif position == 'upper right':
-            xy = (0.95, 0.95)
-        elif position == 'upper left':
-            xy = (0.05, 0.95)
-        elif position == 'center':
-            xy = (0.5, 0.5)
-        else:
-            xy = position
-            
-        # Create an annotation box
-        ab = AnnotationBbox(imagebox, xy, xycoords='axes fraction', 
-                           box_alignment=(1, 0), 
-                           pad=0.5,
-                           frameon=False)
-        
-        # Add the annotation box to the axis
-        ax.add_artist(ab)
-    except Exception as e:
-        print(f"Error adding logo: {e}")
-        
-# Example usage (commented out as logo file doesn't exist in this tutorial)
-# fig, ax = plt.subplots(figsize=(12, 6))
-# plt.plot(months, metrics['Completeness'], marker='o', linewidth=2.5)
-# plt.title('Data Completeness Trend')
-# plt.ylabel('Completeness Score (%)')
-# plt.grid(True, linestyle='--', alpha=0.7)
-# add_logo(ax, 'company_logo.png', position='lower right', zoom=0.1)
-# plt.tight_layout()
-# plt.show()
 ```
 
 ## Mini-Project: Data Quality Dashboard
@@ -743,4 +695,290 @@ def generate_data_quality_metrics(days=90, departments=None):
         # Add data points for each day
         for i, date in enumerate(dates):
             # Add trends and some random variation
-            completeness = min(100, max(0, base_completeness +
+            completeness = min(100, max(0, base_completeness + i * completeness_trend + np.random.normal(0, 1)))
+            accuracy = min(100, max(0, base_accuracy + i * accuracy_trend + np.random.normal(0, 1.2)))
+            consistency = min(100, max(0, base_consistency + i * consistency_trend + np.random.normal(0, 1.5)))
+            timeliness = min(100, max(0, base_timeliness + i * timeliness_trend + np.random.normal(0, 1.8)))
+            
+            # Add some "events"
+            # Data quality improvement initiative at day 30
+            if i == 30:
+                completeness += 3
+                accuracy += 3
+                consistency += 3
+                timeliness += 3
+            
+            # System issue at day 45-55
+            if 45 <= i <= 55:
+                accuracy -= 5
+                timeliness -= 8
+            
+            # Add row to the dataset
+            data.append({
+                'date': date,
+                'department': dept,
+                'completeness': round(completeness, 1),
+                'accuracy': round(accuracy, 1),
+                'consistency': round(consistency, 1),
+                'timeliness': round(timeliness, 1)
+            })
+    
+    return pd.DataFrame(data)
+
+# Generate the sample data
+data_quality_df = generate_data_quality_metrics()
+
+# Calculate the overall quality score
+data_quality_df['overall_score'] = data_quality_df[['completeness', 'accuracy', 'consistency', 'timeliness']].mean(axis=1).round(1)
+
+# Create an interactive dashboard
+def create_data_quality_dashboard(df):
+    """Create an interactive data quality dashboard using Plotly"""
+    
+    # Create the dashboard layout
+    fig = make_subplots(
+        rows=3, cols=2,
+        specs=[
+            [{"colspan": 2}, None],
+            [{"type": "indicator"}, {"type": "indicator"}],
+[{"type": "pie"}, {"type": "indicator"}]
+        ],
+        subplot_titles=(
+            "Overall Data Quality Trend by Department", 
+            "", "",
+            "Data Quality Dimensions", "Data Quality by Department"
+        ),
+        column_widths=[0.6, 0.4],
+        row_heights=[0.4, 0.3, 0.3],
+        vertical_spacing=0.08,
+        horizontal_spacing=0.08
+    )
+    
+    # 1. Overall trend line chart - top section
+    departments = df['department'].unique()
+    
+    for dept in departments:
+        dept_data = df[df['department'] == dept]
+        fig.add_trace(
+            go.Scatter(
+                x=dept_data['date'], 
+                y=dept_data['overall_score'],
+                mode='lines',
+                name=dept,
+                hovertemplate='<b>%{x}</b><br>Score: %{y:.1f}%<extra></extra>'
+            ),
+            row=1, col=1
+        )
+    
+    # 2. Latest overall score gauge - middle left
+    latest_overall = df['overall_score'].iloc[-1]
+    
+    fig.add_trace(
+        go.Indicator(
+            mode="gauge+number+delta",
+            value=latest_overall,
+            title={"text": "Overall Quality Score"},
+            delta={'reference': df['overall_score'].iloc[-30], 'valueformat': '.1f'},
+            gauge={
+                'axis': {'range': [None, 100], 'tickwidth': 1},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [0, 70], 'color': "red"},
+                    {'range': [70, 85], 'color': "orange"},
+                    {'range': [85, 100], 'color': "green"}
+                ],
+                'threshold': {
+                    'line': {'color': "black", 'width': 4},
+                    'thickness': 0.75,
+                    'value': 90
+                }
+            }
+        ),
+        row=2, col=1
+    )
+    
+    # 3. Data quality dimensions comparison - middle right
+    latest_data = df.iloc[-1]
+    dimensions = ['completeness', 'accuracy', 'consistency', 'timeliness']
+    
+    fig.add_trace(
+        go.Indicator(
+            mode="number+delta",
+            value=latest_data['completeness'],
+            title={"text": "Completeness"},
+            domain={'row': 0, 'column': 0},
+            delta={'reference': df['completeness'].iloc[-30], 'valueformat': '.1f'}
+        ),
+        row=2, col=2
+    )
+    
+    # 4. Department quality pie chart - bottom left
+    dept_avg = df.groupby('department')['overall_score'].mean().reset_index()
+    
+    fig.add_trace(
+        go.Pie(
+            labels=dept_avg['department'],
+            values=dept_avg['overall_score'],
+            hole=.3,
+            hoverinfo='label+percent',
+            textinfo='label+value',
+            textfont_size=12,
+            marker=dict(
+                colors=['#3366CC', '#DC3912', '#FF9900', '#109618', '#990099'],
+                line=dict(color='#FFFFFF', width=2)
+            )
+        ),
+        row=3, col=1
+    )
+    
+    # 5. Latest quality dimensions by department - bottom right
+    latest_by_dept = df[df['date'] == df['date'].max()].reset_index(drop=True)
+    
+    # Create a heatmap of the latest data by department
+    z_data = []
+    for dim in dimensions:
+        z_data.append(latest_by_dept.pivot_table(index='department', values=dim, aggfunc='mean').values.flatten())
+    
+    fig.add_trace(
+        go.Heatmap(
+            z=z_data,
+            x=latest_by_dept['department'].unique(),
+            y=dimensions,
+            colorscale='RdYlGn',
+            zmin=70,
+            zmax=100,
+            colorbar=dict(title="Score"),
+            hovertemplate='Department: %{x}<br>Dimension: %{y}<br>Score: %{z:.1f}%<extra></extra>'
+        ),
+        row=3, col=2
+    )
+    
+    # Update layout
+    fig.update_layout(
+        title_text="Data Quality Management Dashboard",
+        title_font_size=24,
+        height=900,
+        width=1200,
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    
+    # Add date range slider
+    fig.update_xaxes(
+        rangeslider_visible=True,
+        rangeslider_thickness=0.05,
+        row=1, col=1
+    )
+    
+    # Add annotations
+    # Highlight system issue period
+    start_date = df['date'].min() + timedelta(days=45)
+    end_date = df['date'].min() + timedelta(days=55)
+    
+    fig.add_vrect(
+        x0=start_date, 
+        x1=end_date,
+        fillcolor="red", 
+        opacity=0.1,
+        layer="below", 
+        line_width=0,
+        row=1, col=1
+    )
+    
+    fig.add_annotation(
+        x=start_date + (end_date - start_date)/2,
+        y=100,
+        text="System Issue",
+        showarrow=True,
+        arrowhead=1,
+        ax=0,
+        ay=-30,
+        row=1, col=1
+    )
+    
+    return fig
+
+# Create and display the dashboard
+quality_dashboard = create_data_quality_dashboard(data_quality_df)
+quality_dashboard.show()
+```
+
+## Creating Your Data Quality Dashboard
+
+To build a data quality dashboard for your organization:
+
+1. **Identify key metrics**: Determine the data quality dimensions most important for your business (completeness, accuracy, consistency, timeliness, etc.)
+
+2. **Set up data collection**: Create automated processes to calculate quality scores for your datasets, potentially using pandas functions from the previous module
+
+3. **Choose visualization components**:
+   - Time series for tracking trends
+   - Gauges for current status
+   - Heatmaps for comparing dimensions across data domains
+   - Drill-down capabilities for investigating issues
+
+4. **Add alerting**: Configure thresholds for quality scores and highlight periods where metrics fall below acceptable levels
+
+5. **Create a dashboard code template**:
+   ```python
+   def create_quality_dashboard(data_file, output_file=None):
+       """
+       Create a data quality dashboard from quality metrics
+       
+       Args:
+           data_file: CSV file with quality metrics
+           output_file: Optional HTML file to save the dashboard
+       """
+       # Load the data
+       df = pd.read_csv(data_file)
+       
+       # Create the dashboard (using code from the example above)
+       dashboard = create_data_quality_dashboard(df)
+       
+       # Save or display
+       if output_file:
+           dashboard.write_html(output_file)
+       else:
+           dashboard.show()
+   ```
+
+## Next Steps
+
+After mastering these visualization techniques, you'll be ready to:
+
+1. Create interactive web-based dashboards with Dash or Streamlit
+2. Connect visualizations to live data sources
+3. Automate the generation and distribution of data quality reports
+4. Develop custom visualization components for specific data governance needs
+
+## Resources
+
+- [Matplotlib Documentation](https://matplotlib.org/stable/contents.html)
+- [Seaborn Tutorial](https://seaborn.pydata.org/tutorial.html)
+- [Plotly Python Documentation](https://plotly.com/python/)
+- [Data Visualization Best Practices](https://www.tableau.com/learn/articles/data-visualization-tips)
+- [Information Dashboard Design (Book by Stephen Few)](https://www.perceptualedge.com/library.php)
+
+## Exercises and Projects
+
+For additional practice, try these exercises:
+
+1. Create a data quality dashboard for a sample dataset
+2. Develop visualizations that show the impact of data quality on business metrics
+3. Build a missing value visualization tool for your datasets
+4. Create custom color schemes and styles for your organization's visualizations
+
+## Contributing
+
+If you've found this guide helpful, consider contributing:
+- Add new visualization examples relevant to data governance
+- Share templates for common data quality reports
+- Suggest improvements or corrections
+
+Happy visualizing!
